@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include <stdint.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -35,6 +36,7 @@ typedef struct {
     uint8_t camera_mem_mode;
     app_video_frame_operation_cb_t user_camera_video_frame_operation_cb;
     TaskHandle_t video_stream_task_handle;
+    int video_fd;
     uint8_t video_task_core_id;
     bool video_task_delete;
     void *video_task_user_data;
@@ -112,11 +114,6 @@ int app_video_open(char *dev, video_fmt_t init_fmt)
         goto exit_0;
     }
 
-    ESP_LOGI(TAG, "width=%" PRIu32 " height=%" PRIu32, default_format.fmt.pix.width, default_format.fmt.pix.height);
-
-    app_camera_video.camera_buf_hes = default_format.fmt.pix.width;
-    app_camera_video.camera_buf_ves = default_format.fmt.pix.height;
-
     if (default_format.fmt.pix.pixelformat != init_fmt) {
         struct v4l2_format format = {
             .type = type,
@@ -129,7 +126,14 @@ int app_video_open(char *dev, video_fmt_t init_fmt)
             ESP_LOGE(TAG, "failed to set format");
             goto exit_0;
         }
+
+        default_format = format;
     }
+
+    ESP_LOGI(TAG, "width=%" PRIu32 " height=%" PRIu32, default_format.fmt.pix.width, default_format.fmt.pix.height);
+
+    app_camera_video.camera_buf_hes = default_format.fmt.pix.width;
+    app_camera_video.camera_buf_ves = default_format.fmt.pix.height;
 
 #if CONFIG_EXAMPLE_ENABLE_CAM_SENSOR_PIC_VFLIP
     controls.ctrl_class = V4L2_CTRL_CLASS_USER;
@@ -254,6 +258,17 @@ uint32_t app_video_get_buf_size(void)
     return buf_size;
 }
 
+void app_video_get_frame_size(uint32_t *h_res, uint32_t *v_res)
+{
+    if (h_res) {
+        *h_res = app_camera_video.camera_buf_hes;
+    }
+
+    if (v_res) {
+        *v_res = app_camera_video.camera_buf_ves;
+    }
+}
+
 static inline esp_err_t video_receive_video_frame(int video_fd)
 {
     memset(&app_camera_video.v4l2_buf, 0, sizeof(app_camera_video.v4l2_buf));
@@ -343,7 +358,7 @@ errout:
 
 static void video_stream_task(void *arg)
 {
-    int video_fd = *((int *)arg);
+    int video_fd = (int)(intptr_t)arg;
 
     while (1) {
         ESP_ERROR_CHECK(video_receive_video_frame(video_fd));
@@ -351,6 +366,7 @@ static void video_stream_task(void *arg)
         video_operation_video_frame(video_fd);
 
         ESP_ERROR_CHECK(video_free_video_frame(video_fd));
+        taskYIELD();
 
         if (app_camera_video.video_task_delete) {
             app_camera_video.video_task_delete = false;
@@ -365,10 +381,11 @@ esp_err_t app_video_stream_task_start(int video_fd, int core_id, void *user_data
 {
     app_camera_video.video_task_core_id = core_id;
     app_camera_video.video_task_user_data = user_data;
+    app_camera_video.video_fd = video_fd;
 
     video_stream_start(video_fd);
 
-    BaseType_t result = xTaskCreatePinnedToCore(video_stream_task, "video stream task", VIDEO_TASK_STACK_SIZE, &video_fd, VIDEO_TASK_PRIORITY, &app_camera_video.video_stream_task_handle, core_id);
+    BaseType_t result = xTaskCreatePinnedToCore(video_stream_task, "video stream task", VIDEO_TASK_STACK_SIZE, (void *)(intptr_t)app_camera_video.video_fd, VIDEO_TASK_PRIORITY, &app_camera_video.video_stream_task_handle, core_id);
 
     if (result != pdPASS) {
         ESP_LOGE(TAG, "failed to create video stream task");

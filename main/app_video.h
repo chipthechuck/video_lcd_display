@@ -100,6 +100,14 @@ esp_err_t app_video_get_bufs(int fb_num, void **fb);
 uint32_t app_video_get_buf_size(void);
 
 /**
+ * @brief Get the negotiated video frame width and height.
+ *
+ * @param h_res Pointer to receive horizontal resolution, can be NULL.
+ * @param v_res Pointer to receive vertical resolution, can be NULL.
+ */
+void app_video_get_frame_size(uint32_t *h_res, uint32_t *v_res);
+
+/**
  * @brief Start the video stream task.
  *
  * Initiates the video streaming by starting the video stream and creating

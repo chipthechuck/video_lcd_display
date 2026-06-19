@@ -5,11 +5,31 @@
 
 This example is based on the [esp_video](https://github.com/espressif/esp-video-components/tree/master/esp_video) component and demonstrates how to display images from the camera on an LCD screen.
 
-## How to use the example
+## PPA Overlay
+
+This example can draw a text overlay on top of the camera preview by using the ESP32-P4 Pixel Processing Accelerator (PPA). When `EXAMPLE_ENABLE_TEXT_OVERLAY` is enabled, the application registers a PPA blend client, creates an alpha-only text mask in PSRAM, and blends the mask into each LCD frame after the camera image has been scaled.
+
+The default overlay renders the text `CAMERA` in white at the center of the displayed image. The overlay behavior can be adjusted in `main/main.c`:
+
+* `EXAMPLE_ENABLE_TEXT_OVERLAY` enables or disables the overlay.
+* `EXAMPLE_OVERLAY_TEXT` selects the displayed text.
+* `EXAMPLE_OVERLAY_TEXT_SCALE` controls the glyph size.
+* `EXAMPLE_OVERLAY_TEXT_ALPHA` controls the text opacity.
+* `EXAMPLE_OVERLAY_BLEND_FULL_FRAME` selects whether the PPA blend operation covers the full LCD frame or only the text bounding box.
+
+## Performance profiling
+Camera sensor: sc2336, resolution 1280x720 @ 45FPS. Pixel format for display: RGB565 
+| Case                     |       FPS | Camera buffer HES | Camera buffer VES | Camera buffer length | Scale avg (µs) | Overlay avg (µs) | Draw avg (µs) |
+| ------------------------ | --------: | ----------------: | ----------------: | -------------------: | -------------: | ---------------: | ------------: |
+| Scale 22, full frame     | 19.999968 |              1280 |               720 |              1800 KB |          17082 |            15623 |            70 |
+| Scale 22, non full frame | 29.999742 |              1280 |               720 |              1800 KB |          16478 |             3414 |           844 |
+| Scale 4, non full frame  | 29.999922 |              1280 |               720 |              1800 KB |          16420 |              590 |           844 |
+| Scale 4, full frame      | 19.999888 |              1280 |               720 |              1800 KB |          17074 |            15612 |            70 |
+
 
 ## ESP-IDF Required
 
-- This example supports ESP-IDF release/v5.4 and later branches. By default, it runs on ESP-IDF release/v5.4.
+- This example supports ESP-IDF release/v6.0.0.
 - Please follow the [ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html) to set up the development environment. **We highly recommend** you [Build Your First Project](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/index.html#build-your-first-project) to get familiar with ESP-IDF and make sure the environment is set up correctly.
 
 ### Prerequisites
